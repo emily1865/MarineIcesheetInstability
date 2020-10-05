@@ -172,7 +172,7 @@ def case_2(L0, plot = True):
 		
 	return L
 	
-def dynamic_bedrock():
+def dynamic_bedrock(tau):
 	
 	# parameters of glacier
 	eps = 1
@@ -187,7 +187,6 @@ def dynamic_bedrock():
 	P_E = 5000 # years
 	
 	rho = 1/3 # ratio rho_ice/rho_rock
-	tau = 1000 # years, time constant for bedrock adjustment
 	
 	# time 
 	t = np.arange(0,5000) # years, time step = 1 yr
@@ -211,8 +210,8 @@ def dynamic_bedrock():
 	# initial ice thickness
 	H_f = np.max([alpha_f*np.sqrt(L[0]), -eps*delta*d(L[0])]) # m
 	H_m = alpha_m*np.sqrt(L[0]) # m	
-	C = 9/(4*L[0])*(H_m-H_f-s*L[0]/2)**2
-	H = np.nan_to_num(H_f + s*(L[0]-x) + np.sqrt(C*(L[0]-x))) # for x>L: H=0 --> replace nan from sqrt with 0
+	C = 9/(4*L[0])*(H_m-H_f-d(L[0])-s*L[0]/2-np.mean(d(x)))**2
+	H = np.nan_to_num(H_f + d(L[0]) + s*(L[0]-x) + np.sqrt(C*(L[0]-x))) # for x>L: H=0 --> replace nan from sqrt with 0
 	
 	# initial depression assuming isostatic equilibrium: initial bedrock height d+delta_d
 	delta_d[0,:] = -rho*H
@@ -245,8 +244,8 @@ def dynamic_bedrock():
 		#bedrock adjustment
 		s = -np.mean((d(x[1:])+delta_d[i,1:]-d(x[0:-1])-delta_d[i,1:])/(x[1:]-x[0:-1]))
 		
-		C = 9/(4*L[i])*(H_m-H_f-s*L[i]/2)**2
-		H = np.nan_to_num(H_f + s*(L[i]-x) + np.sqrt(C*(L[i]-x))) 
+		C = 9/(4*L[i])*(H_m-d(L[i])-delta_d[i,index_L]-H_f-s*L[i]/2 - np.mean(d(x)+delta_d[i,:]))**2
+		H = np.nan_to_num(H_f + d(L[i])+delta_d[i,index_L] + s*(L[i]-x) + np.sqrt(C*(L[i]-x))) 
 		
 		ddelta_ddt = -1/tau*(rho*H + delta_d[i])
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
@@ -260,10 +259,11 @@ def main():
 	x = np.linspace(0,50000, num = 100) #m
 	
 	plot_bedrock(x)
-	
-	### CASE 1 ###
+
 	# time 
 	t = np.arange(0,5000) # years
+	
+	### CASE 1 ###
 	#accumulation
 	a = 0.0005*t
 	
@@ -297,7 +297,8 @@ def main():
 	plt.show()
 	
 	### DYNAMIC BEDROCK ###
-	L_dyn, delta_d = dynamic_bedrock()
+	tau = 2000 # years, time constant for bedrock adjustment
+	L_dyn, delta_d = dynamic_bedrock(tau)
 	
 	fig = plt.figure()
 	ax1 = fig.add_subplot(111)
