@@ -14,19 +14,19 @@ def plot_bedrock(x):
 	plt.xlabel("x [km]")
 	plt.ylabel("d(x) [m]")
 	plt.title("bedrock elevation")
-	plt.show()
-	
-def case_1(L0,t,a, plot = True):
+	plt.savefig('bedrock.pdf')
+
+def case_1(L0,t,a, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.7, c = 2.4, plot = True):
 	# L0: inital glacier length in m
 	# t: time in years
 	# a accumulation at times t in m/yr
 	
-	# parameters of glacier
-	eps = 1
-	delta = 1.127
-	alpha_m = 2 # m**0.5
-	alpha_f = 0.7 # m**0.5
-	c = 2.4 # 1/a
+	# parameters of glacier:
+	# eps
+	# delta
+	# alpha_m in m**0.5
+	# alpha_f in m**0.5
+	# c = 2.4 in 1/a
 	
 	# initialize variables
 	L = np.zeros(t.shape)
@@ -79,28 +79,31 @@ def case_1(L0,t,a, plot = True):
 		ax4.set_ylabel("B, -F m$^2$ a$^{-1}$")
 		ax4.set_xlim([0,5000])
 		ax4.xaxis.grid(True)
-		plt.show()
+		plt.savefig('case_1.pdf')
 		
 	return L
 	
-def case_2(L0, plot = True):
+def case_2(L0, P_E, time, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2.4, beta = 0.005, plot = True):
 	# L0: initial glacier length in m
+	# E: equilibrium line height in m
+	# time: time model should be run in years
 	
 	# parameters of glacier
-	eps = 1
-	delta = 1.127
-	alpha_m = 2 # m**0.5
-	alpha_f = 0.5 # m**0.5
-	c = 2.4 # 1/a
-	beta = 0.005 # years
+	# eps
+	# delta 
+	# alpha_m in m**0.5
+	# alpha_f in m**0.5
+	# c in 1/a
+	# beta in years
 		
 	# equilibirum line parameters
 	E0 = 100 # m
 	A_E = 350 # m
-	P_E = 5000 # years
+	#P_E = 5000 # years
 
 	# time 
-	t = np.linspace(0,5000,5000) # years
+	timestep = 1 # year
+	t = np.arange(0,time,timestep) # years
 	
 	# initialize variables
 	L = np.zeros(t.shape)
@@ -132,7 +135,7 @@ def case_2(L0, plot = True):
 		
 		# prevent glacier length from becoming negative
 		if L[i+1]<=0:
-			L[i+1] = 0.001
+			L[i+1] = 0.0001
 	
 	if plot:
 		# plot results	
@@ -168,19 +171,20 @@ def case_2(L0, plot = True):
 		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
 		ax4.set_xlim([0,5000])
 		ax4.xaxis.grid(True)
-		plt.show()
+		plt.savefig('case_2.pdf')
 		
 	return L
 	
-def dynamic_bedrock(tau):
+def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2.4, beta = 0.005):
+	# tau: time constant of bedrock in years
 	
 	# parameters of glacier
-	eps = 1
-	delta = 1.127
-	alpha_m = 2 # m**0.5
-	alpha_f = 0.5 # m**0.5
-	c = 2.4 # 1/a
-	beta = 0.005 # years
+	# eps
+	# delta 
+	# alpha_m in m**0.5
+	# alpha_f in m**0.5
+	# c in 1/a
+	# beta in years
 	
 	E0 = 100 # m
 	A_E = 350 # m
@@ -202,7 +206,7 @@ def dynamic_bedrock(tau):
 	delta_d = np.zeros((t.shape[0],x.shape[0]))
 
 	# inital glacier length
-	L[0] = 0.001 # m
+	L[0] = 0.0001 # m
 	
 	# inital mean slope
 	s = -np.mean((d(x[1:])-d(x[0:-1]))/(x[1:]-x[0:-1]))
@@ -239,7 +243,7 @@ def dynamic_bedrock(tau):
 		
 		# prevent glacier length from becoming negative
 		if L[i+1]<=0:
-			L[i+1] = 0.01
+			L[i+1] = 0.0001
 			
 		#bedrock adjustment
 		s = -np.mean((d(x[1:])+delta_d[i,1:]-d(x[0:-1])-delta_d[i,1:])/(x[1:]-x[0:-1]))
@@ -251,50 +255,77 @@ def dynamic_bedrock(tau):
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
 	
 	return L, delta_d
-	
-def main():
-	
-	### PLOT BEDROCK ###
-	#horizontal coordinates
-	x = np.linspace(0,50000, num = 100) #m
-	
-	plot_bedrock(x)
 
-	# time 
-	t = np.arange(0,5000) # years
+def case_1_hysteresis():
+	#plot hysteresis curve
 	
-	### CASE 1 ###
-	#accumulation
+	t = np.arange(0,5000) # years
 	a = 0.0005*t
 	
-	L1 = case_1(0.01,t,a)
+	L1 = case_1(0.0001,t,a,plot=False)
 	
 	# hysteresis
 	L1_hyst = case_1(10000, t,a, plot = False)
 	L1_reverse = case_1(L1[-1],t,a[::-1], plot = False)
 	
-	plt.figure()
+	fig,ax = plt.subplots()
 	plt.plot(a, L1_hyst/1000)
-	plt.plot(a,L1_reverse[::-1]/1000)
+	plt.plot(a,L1_reverse[::-1]/1000,c='C0')
 	plt.xlabel("a [m ice a$^-1$]")
 	plt.ylabel("L [km]")
 	plt.ylim(0,50)
-	plt.show()
+	ax.annotate(' ', xy = (1.3,19),xytext =(1.1,17),arrowprops=dict(arrowstyle="->"))
+	ax.annotate(' ',xy =(1.1,46.5),xytext=(1.3,46.7),arrowprops=dict(arrowstyle="->"))
+	plt.savefig('case_1_hysteresis.pdf')
 	
-	### CASE 2 ###
-	L2 = case_2(0.001)
+def case_2_hysteresis():
+	# plot hysteresis curve for different periods of E
 	
-	#hysteresis
 	E0 = 100 # m
 	A_E = 350 # m
 	P_E = 5000 # years
-	E = E0 + A_E*np.sin(2*np.pi*t/P_E + np.pi/2)
+	E = E0 + A_E*np.sin(2*np.pi*np.arange(0,P_E)/P_E + np.pi/2)
+	L2 = case_2(0.0001,P_E,P_E, plot=False)
 	
-	plt.figure()
-	plt.plot(E,L2/1000)
+	fig, ax = plt.subplots()
+	plt.plot(E,L2/1000,label='$P_E = 5 kyr$')
+	P_E = 10000 # years
+	E = E0 + A_E*np.sin(2*np.pi*np.arange(0,P_E)/P_E + np.pi/2)
+	L2 = case_2(0.0001,P_E,P_E, plot=False)
+	plt.plot(E,L2/1000, linestyle = 'dashed',label='$P_E = 10 kyr$')
+	P_E = 50000 # years
+	E = E0 + A_E*np.sin(2*np.pi*np.arange(0,P_E)/P_E + np.pi/2)
+	L2 = case_2(0.0001,P_E,P_E, plot=False)
+	plt.plot(E,L2/1000, linestyle = 'dotted',label='$P_E = 50 kyr$')
 	plt.xlabel(" E(m)")
 	plt.ylabel("L [km]")
-	plt.show()
+	plt.legend()
+	ax.annotate(' ', xy = (430,25),xytext =(420,30),arrowprops=dict(arrowstyle="->"))
+	ax.annotate(' ',xy =(-220,25),xytext=(-190,20),arrowprops=dict(arrowstyle="->"))
+	plt.savefig('case_2_hysteresis.pdf')
+	
+def main():
+	
+	### PLOT BEDROCK ###
+	#horizontal coordinates
+	#x = np.linspace(0,50000, num = 100) #m
+	#plot_bedrock(x)
+	
+	### CASE 1 ###
+	# time 
+	t = np.arange(0,5000) # years
+	#accumulation
+	a = 0.0005*t
+	
+	L1 = case_1(0.01,t,a)
+	
+	case_1_hysteresis()
+	
+	### CASE 2 ###
+	L2 = case_2(0.0001,5000,5000)
+	
+	#hysteresis with different periods
+	case_2_hysteresis()
 	
 	### DYNAMIC BEDROCK ###
 	tau = 2000 # years, time constant for bedrock adjustment
