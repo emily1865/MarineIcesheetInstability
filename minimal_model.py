@@ -1,5 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import glob
+import cv2
 
 def d(x,d0 = 200, s =0.014, lam =300,xs = 40000,sigma = 10000):
 	# bedrock elevation
@@ -14,7 +17,7 @@ def plot_bedrock(x):
 	plt.xlabel("x [km]")
 	plt.ylabel("d(x) [m]")
 	plt.title("bedrock elevation")
-	plt.savefig('bedrock.pdf')
+	plt.savefig('img/bedrock.pdf')
 
 def calculate_H_m(L, alpha_m):
 	# mean ice thickness
@@ -22,18 +25,22 @@ def calculate_H_m(L, alpha_m):
 
 def calculate_d_f(L):
 	# water depth
+	# not for dynamic bedrock
 	return np.array([-np.min([0,d(Li)]) for Li in L])
 
 def calculate_H_f(L, alpha_f, eps, delta):
 	# frontal ice thickness
+	# not for dynamic bedrock
 	return np.max([alpha_f*np.sqrt(L), -eps*delta*d(L)], axis = 0)
 
 def calculate_F(L, c, alpha_f, eps, delta):
 	# calculate calving flux
+	# not for dynamic bedrock
 	return np.array([np.min([0,c*d(Li)*calculate_H_f(Li, alpha_f, eps, delta)]) for Li in L])
 	
 def calculate_h_m(L, alpha_f, eps, delta, alpha_m):
 	# calculate mean glacier height
+	# not for dynamic bedrock
 	return (d(0)+d(L)+calculate_H_f(L, alpha_f, eps,delta) + calculate_H_m(L, alpha_m))/2
 
 def case_1(L0,t,a, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.7, c = 2.4, plot = True):
@@ -104,7 +111,7 @@ def plot_case_1(t,L,a,eps,delta,alpha_m, alpha_f,c, name):
 	ax4.set_ylabel("B, -F m$^2$ a$^{-1}$")
 	ax4.set_xlim([0,t[-1]])
 	ax4.xaxis.grid(True)
-	plt.savefig('case_1.pdf')
+	plt.savefig('img/case_1.pdf')
 	
 def case_1_hysteresis():
 	#plot hysteresis curve
@@ -126,7 +133,7 @@ def case_1_hysteresis():
 	plt.ylim(0,50)
 	ax.annotate(' ', xy = (1.3,19),xytext =(1.1,17),arrowprops=dict(arrowstyle="->"))
 	ax.annotate(' ',xy =(1.1,46.5),xytext=(1.3,46.7),arrowprops=dict(arrowstyle="->"))
-	plt.savefig('case_1_hysteresis.pdf')
+	plt.savefig('img/case_1_hysteresis.pdf')
 
 def case_2(L0, P_E, t, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2.4, beta = 0.005, plot = True):
 	# L0: initial glacier length in m
@@ -211,7 +218,7 @@ def case_2(L0, P_E, t, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2
 		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
-		plt.savefig('case_2.pdf')
+		plt.savefig('img/case_2.pdf')
 		
 	return L
 
@@ -242,7 +249,7 @@ def case_2_hysteresis():
 	plt.legend()
 	ax.annotate(' ', xy = (430,25),xytext =(420,30),arrowprops=dict(arrowstyle="->"))
 	ax.annotate(' ',xy =(-220,25),xytext=(-190,20),arrowprops=dict(arrowstyle="->"))
-	plt.savefig('case_2_hysteresis.pdf')
+	plt.savefig('img/case_2_hysteresis.pdf')
 	
 def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2.4, beta = 0.005, plot = True):
 	# tau: time constant of bedrock in years
@@ -273,6 +280,7 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 	# initialize variables
 	L = np.zeros(t.shape)
 	delta_d = np.zeros((t.shape[0],x.shape[0]))
+	h = np.zeros((t.shape[0],x.shape[0]))
 
 	# inital glacier length
 	L[0] = 0.0001 # m
@@ -283,9 +291,10 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 	# initial ice thickness
 	H_f = np.max([alpha_f*np.sqrt(L[0]), -eps*delta*d(L[0])]) # m
 	H_m = alpha_m*np.sqrt(L[0]) # m	
-	C = 9/(4*L[0])*(H_m-H_f-d(L[0])-s*L[0]/2-np.mean(d(x)))**2
-	H = np.nan_to_num(H_f + d(L[0]) + s*(L[0]-x) + np.sqrt(C*(L[0]-x))) # for x>L: H=0 --> replace nan from sqrt with 0
+	C = 9/(4*L[0])*(H_m-H_f-d(L[0])-s*L[0]/2+np.mean(d(x[0])))**2
+	H = np.nan_to_num(H_f + d(L[0]) + s*(L[0]-x) + np.sqrt(C*(L[0]-x))-d(x)) # for x>L: H=0 --> replace nan from sqrt with 0
 	
+	h[0,:] = H+d(x)
 	# initial depression assuming isostatic equilibrium: initial bedrock height d+delta_d
 	delta_d[0,:] = -rho*H
 	
@@ -317,8 +326,10 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 		#bedrock adjustment
 		s = -np.mean((d(x[1:])+delta_d[i,1:]-d(x[0:-1])-delta_d[i,1:])/(x[1:]-x[0:-1]))
 		
-		C = 9/(4*L[i])*(H_m-d(L[i])-delta_d[i,index_L]-H_f-s*L[i]/2 - np.mean(d(x)+delta_d[i,:]))**2
-		H = np.nan_to_num(H_f + d(L[i])+delta_d[i,index_L] + s*(L[i]-x) + np.sqrt(C*(L[i]-x))) 
+		C = 9/(4*L[i])*(H_m-d(L[i])-delta_d[i,index_L]-H_f-s*L[i]/2 + np.mean(d(x[0:index_L])+delta_d[i,0:index_L]))**2
+		H = np.nan_to_num(H_f + d(L[i])+delta_d[i,index_L] + s*(L[i]-x) + np.sqrt(C*(L[i]-x)) - d(x)-delta_d[i,:])
+		
+		h[i,:] = H + d(x)+delta_d[i,:]
 		
 		ddelta_ddt = -1/tau*(rho*H + delta_d[i])
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
@@ -326,23 +337,26 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 	if plot:
 		fig = plt.figure(figsize = (8,12))
 		ax1 = fig.add_subplot(311)
-		ax1.plot(t,L/1000, label = "L")
+		p1, = ax1.plot(t,L/1000, label = "L")
 		ax1.xaxis.grid(True)
 		ax1.set_xlim([0,t[-1]])
 		ax1.set_ylabel("L [km]")
-		ax1.legend(loc = 3)
 		ax2 = ax1.twinx()
-		ax2.plot(t,np.mean(delta_d, axis = 1),linestyle = 'dashed', color = 'red', label ="mean depression")
+		p2, = ax2.plot(t,np.mean(delta_d, axis = 1),linestyle = 'dashed', color = 'red', label ="mean depression")
 		ax2.set_ylabel("<$\Delta$d> [m]")
-		ax2.legend(loc = 1)	
+		ax2b = ax1.twinx()
+		ax2b.set_ylabel("E [m]")
+		p2b, =ax2b.plot(t,E,label = 'E', color = 'darkorange',linestyle = 'dotted')
+		ax2b.spines['right'].set_position(('outward', 60))
+		ax1.legend(handles = [p1,p2,p2b])
 		
 		delta_d_f = delta_d_of_L(delta_d,L,x) 
 		ax3 = fig.add_subplot(312)
-		H_f = np.max([alpha_f*np.sqrt(L), -eps*delta*(d(L)+delta_d_f)],axis = 0)
+		H_f = calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta)
 		ax3.plot(t, H_f, label = "H$_f$")
 		ax3.set_ylabel("H$_m$, H$_f$, d$_f$ [m]")
-		ax3.plot(t, [-np.min([0,d(L[i])+delta_d_f[i]]) for i in range(L.shape[0])], label = "d$_f$", linestyle = 'dashed', color = 'red')
-		ax3.plot(t, alpha_m*np.sqrt(L), linestyle = 'dotted', label = "H$_m$")
+		ax3.plot(t, calculate_d_f_dynamic_bedrock(L,delta_d_f), label = "d$_f$", linestyle = 'dashed', color = 'red')
+		ax3.plot(t, calculate_H_m(L, alpha_m), linestyle = 'dotted', label = "H$_m$")
 		ax3.set_xlim([0,t[-1]])
 		ax3.xaxis.grid(True)
 		ax3.legend()
@@ -358,13 +372,50 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
-		plt.savefig('dynamic_bedrock.pdf')
+		plt.savefig('img/dynamic_bedrock.pdf')
 	
-	return L, x, delta_d
+	return L, x, delta_d, h 
 
 def delta_d_of_L(delta_d,L,x):
 	# get delta d at glacier front at L
 	return np.array([delta_d[i,(L[i]/10).astype(int)] for i in range(L.shape[0])])
+
+def calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta):
+	return np.max([alpha_f*np.sqrt(L), -eps*delta*(d(L)+delta_d_f)],axis = 0)
+
+def calculate_d_f_dynamic_bedrock(L,delta_d_f):
+	return np.array([-np.min([0,d(L[i])+delta_d_f[i]]) for i in range(L.shape[0])])
+
+def make_movie(x,delta_d,h, filename):
+	
+	for i in range(0,h.shape[0],10):
+		fig = plt.figure()
+		plt.fill_between(x/1000, d(x)+delta_d[i,:], color = 'cornflowerblue')
+		plt.fill_between(x/1000, 700, color = 'lightcyan')
+		plt.fill_between(x/1000,d(x)+delta_d[i,:],h[i,:], color = 'white')
+		plt.fill_between(x/1000,-400, d(x)+delta_d[i,:],color = 'lightgray')
+		plt.xlabel('x [km]')
+		plt.ylabel('height [m]')
+		plt.xlim([0,x[-1]/1000])
+		plt.ylim([-400,700])
+		fig.savefig('movie/movie_%04d.png' %i)
+		plt.close(fig)
+
+	img_array = []
+	for filename in glob.glob('movie/movie*.png'):
+		img = cv2.imread(filename)
+		height, width, layers = img.shape
+		size = (width,height)
+		img_array.append(img)
+
+	out = cv2.VideoWriter('movie/'+filename+'.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
+	
+	for i in range(len(img_array)):
+		out.write(img_array[i])
+	out.release()
+	
+	for file_name in glob.glob("movie/*.png"):
+		os.remove(file_name)
 	
 def main():
 	
@@ -391,7 +442,9 @@ def main():
 	
 	### DYNAMIC BEDROCK ###
 	tau = 2000 # years, time constant for bedrock adjustment
-	L_dyn, x, delta_d = dynamic_bedrock(tau)
+	L_dyn, x, delta_d, h = dynamic_bedrock(tau)
+	#make_movie(x,delta_d,h,'dynamic_bedrock')
+
 	
 if __name__ == "__main__":
     main()
