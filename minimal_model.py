@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import glob
 import cv2
+import pandas as pd
 
 def d(x,d0 = 200, s =0.014, lam =300,xs = 40000,sigma = 10000):
 	# bedrock elevation
@@ -386,6 +387,138 @@ def calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta):
 def calculate_d_f_dynamic_bedrock(L,delta_d_f):
 	return np.array([-np.min([0,d(L[i])+delta_d_f[i]]) for i in range(L.shape[0])])
 
+def calving(t, ocean_forcing, L0, tau=2000, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c0 = 2.4, beta = 0.005, plot = True):
+	# tau: time constant of bedrock in years
+	# t: time array in years
+	
+	# parameters of glacier:
+	# eps
+	# delta 
+	# alpha_m in m**0.5
+	# alpha_f in m**0.5
+	# c0 in 1/a (proportionality parameter for calving)
+	# beta in years
+	
+	rho = 1/3 # ratio rho_ice/rho_rock
+	
+	#horizontal coordinates in 10m steps
+	x = np.arange(0,50000,10) #m
+	
+	#equilibrium line 
+	E0 = -200
+	E = np.ones(t.shape)*E0
+	
+	# calving constant
+	c1 = c0*1.0
+	c = c0 + c1*ocean_forcing
+	
+	# initialize variables
+	L = np.zeros(t.shape)
+	delta_d = np.zeros((t.shape[0],x.shape[0]))
+	h = np.zeros((t.shape[0],x.shape[0]))
+
+	# inital glacier length
+	L[0] = L0 # m
+	
+	# inital mean slope
+	s = -np.mean((d(x[1:])-d(x[0:-1]))/(x[1:]-x[0:-1]))
+	
+	# initial ice thickness
+	H_f = np.max([alpha_f*np.sqrt(L[0]), -eps*delta*d(L[0])]) # m
+	H_m = alpha_m*np.sqrt(L[0]) # m	
+	C = 9/(4*L[0])*(H_m-H_f-d(L[0])-s*L[0]/2+np.mean(d(x[0])))**2
+	H = np.nan_to_num(H_f + d(L[0]) + s*(L[0]-x) + np.sqrt(C*(L[0]-x))-d(x)) # for x>L: H=0 --> replace nan from sqrt with 0
+	
+	h[0,:] = H+d(x)
+	# initial depression assuming isostatic equilibrium: initial bedrock height d+delta_d
+	delta_d[0,:] = -rho*H
+	
+	# time loop
+	for i in range(t.shape[0]-1):
+		
+		index_L = (L[i]/10).astype(int) #np.where(x==np.around(L[i],decimals = -1))[0] # use nearest neighbour approx
+		
+		# front height
+		H_f = np.max([alpha_f*np.sqrt(L[i]), -eps*delta*(d(L[i])+delta_d[i,index_L])]) # m
+	
+		# mean height
+		H_m = alpha_m*np.sqrt(L[i]) # m	
+		h_m = (d(0)+delta_d[i,0] + d(L[i])+delta_d[i,index_L] + H_m+H_f)/2 # m
+		
+		# mass balance
+		F = np.min([0,c[i]*(d(L[i])+delta_d[i,index_L])*H_f])
+		B = beta*(h_m-E[i])*L[i]
+	
+		dLdt = 2*(B+F)/(3*alpha_m)*L[i]**-0.5 # m/a
+	
+		# new glacier length
+		L[i+1] = L[i] + dLdt * (t[i+1]-t[i])
+		
+		# prevent glacier length from becoming negative
+		if L[i+1]<=0:
+			L[i+1] = 0.0001
+			
+		#bedrock adjustment
+		s = -np.mean((d(x[1:])+delta_d[i,1:]-d(x[0:-1])-delta_d[i,1:])/(x[1:]-x[0:-1]))
+		
+		C = 9/(4*L[i])*(H_m-d(L[i])-delta_d[i,index_L]-H_f-s*L[i]/2 + np.mean(d(x[0:index_L])+delta_d[i,0:index_L]))**2
+		H = np.nan_to_num(H_f + d(L[i])+delta_d[i,index_L] + s*(L[i]-x) + np.sqrt(C*(L[i]-x)) - d(x)-delta_d[i,:])
+		
+		h[i,:] = H + d(x)+delta_d[i,:]
+		
+		ddelta_ddt = -1/tau*(rho*H + delta_d[i])
+		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
+	
+	if plot:
+		fig = plt.figure(figsize = (8,8))
+		ax1 = fig.add_subplot(211)
+		p1, = ax1.plot(t,L/1000, label = "L")
+		ax1.xaxis.grid(True)
+		ax1.set_xlim([0,t[-1]])
+		ax1.set_ylabel("L [km]")
+		ax2 = ax1.twinx()
+		p2, = ax2.plot(t,np.mean(delta_d, axis = 1),linestyle = 'dashed', color = 'red', label ="mean depression")
+		ax2.set_ylabel("<$\Delta$d> [m]")
+		ax2b = ax1.twinx()
+		ax2b.set_ylabel("ocean forcing [°C]")
+		p2b, =ax2b.plot(t,ocean_forcing,label = 'ocean forcing', color = 'darkorange',linestyle = 'dotted')
+		ax2b.spines['right'].set_position(('outward', 60))
+		ax1.legend(handles = [p1,p2,p2b])
+		
+		delta_d_f = delta_d_of_L(delta_d,L,x) 
+		H_f = calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta)
+		B = beta*((d(0)+delta_d[:,0]+d(L)+delta_d_f+H_f+alpha_m*np.sqrt(L))/2-E)*L
+		F = np.array([np.min([0,c[i]*(d(L[i])+delta_d_f[i])*H_f[i]]) for i in range(L.shape[0])])
+		ax4 = fig.add_subplot(212)
+		ax4.plot(t,B, label = "B")
+		ax4.plot(t,F, label = "F", linestyle = 'dashed', color = 'red')
+		ax4.plot(t, B+F, label = "B$_{tot}$", linestyle = 'dotted')
+		ax4.legend()
+		ax4.set_xlabel("time [yrs]")
+		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
+		ax4.set_xlim([0,t[-1]])
+		ax4.xaxis.grid(True)
+		plt.savefig("img/ocean_forcing.pdf")
+		
+	return L, x, delta_d, h
+
+def ocean_forcing(t, t_i, t_d=1000, T_max=2):
+	# returns temperature change of ocean
+	
+	# t: time
+	# t_i: time of beginning of all i events
+	# t_d: duration of events
+	# T_max: maximum temperature change in °C
+	
+	delta_T = np.zeros(t.shape)
+	for ti in t_i:
+		peak = T_max*np.sin(2*np.pi*(t-ti)/(2*t_d))
+		peak[t<ti]=0
+		peak[t>(ti+t_d)]=0
+		delta_T += peak
+		
+	return delta_T
+
 def make_movie(x,delta_d,h, filename):
 	
 	for i in range(0,h.shape[0],10):
@@ -427,7 +560,7 @@ def main():
 	### CASE 1 ###
 	# time 
 	t = np.arange(0,5000) # years
-	#accumulation
+	# accumulation
 	a = 0.0005*t
 	
 	L1 = case_1(0.01,t,a)
@@ -437,14 +570,34 @@ def main():
 	### CASE 2 ###
 	L2 = case_2(0.0001,5000,t)
 	
-	#hysteresis with different periods
+	# hysteresis with different periods
 	case_2_hysteresis()
 	
 	### DYNAMIC BEDROCK ###
 	tau = 2000 # years, time constant for bedrock adjustment
 	L_dyn, x, delta_d, h = dynamic_bedrock(tau)
 	#make_movie(x,delta_d,h,'dynamic_bedrock')
-
+	
+	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING ###
+	t = np.arange(0,10000)
+	delta_T_ocean = ocean_forcing(t,[2000,8000])
+	L_calv, x, delta_d, h = calving(t,delta_T_ocean, 40000) # constant atmoph forcing: E0 = -250
+	
+	### PALEOCLIMATIC RECORDS ###
+	paleo_data = pd.read_excel("NGRIP_d18O_and_dust_5cm.xls",sheet_name = "NGRIP-2 d18O and Dust").to_numpy()
+	age = paleo_data[:,3]
+	dO18 = paleo_data[:,1]
+	
+	#smooth data, otherwise there is too much noise to see anything
+	dO18_smooth = np.convolve(dO18, np.ones(15)/15, mode='valid')
+	age_smooth = age[7:-7]
+	
+	plt.figure(figsize = (10,3))
+	plt.plot(age_smooth, dO18_smooth)
+	plt.xlabel("time [yrs b2k] (GICC05)")
+	plt.ylabel("$\delta^{18}$O")
+	plt.xlim([10000,60000])
+	plt.savefig("img/paleo_record.pdf")
 	
 if __name__ == "__main__":
     main()
