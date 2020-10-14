@@ -84,7 +84,7 @@ def case_1(L0,t,a, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.7, c = 2.4, 
 def plot_case_1(t,L,a,eps,delta,alpha_m, alpha_f,c, name):
 	# plot results for case 1
 	
-	fig = plt.figure(figsize = (8,12))
+	fig = plt.figure(figsize = (8,10))
 	ax1 = fig.add_subplot(311)
 	ax1.plot(t,L/1000, label = "L")
 	ax1.xaxis.grid(True)
@@ -187,7 +187,7 @@ def case_2(L0, P_E, t, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2
 	
 	if plot:
 		# plot results	
-		fig = plt.figure(figsize = (8,12))
+		fig = plt.figure(figsize = (8,10))
 		ax1 = fig.add_subplot(311)
 		ax1.plot(t,L/1000, label = "L")
 		ax1.xaxis.grid(True)
@@ -336,7 +336,7 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
 
 	if plot:
-		fig = plt.figure(figsize = (8,12))
+		fig = plt.figure(figsize = (8,10))
 		ax1 = fig.add_subplot(311)
 		p1, = ax1.plot(t,L/1000, label = "L")
 		ax1.xaxis.grid(True)
@@ -387,9 +387,12 @@ def calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta):
 def calculate_d_f_dynamic_bedrock(L,delta_d_f):
 	return np.array([-np.min([0,d(L[i])+delta_d_f[i]]) for i in range(L.shape[0])])
 
-def calving(t, ocean_forcing, L0, tau=2000, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c0 = 2.4, beta = 0.005, plot = True):
+def calving(t, dO18,ocean_forcing, L0, file_name, tau=2000, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c0 = 2.4, beta = 0.005, plot = True):
 	# tau: time constant of bedrock in years
 	# t: time array in years
+	# T: atmospheric temperature
+	# ocean_forcing: tempterature change of ocean temperature
+	# L0: inital glacier length
 	
 	# parameters of glacier:
 	# eps
@@ -405,8 +408,9 @@ def calving(t, ocean_forcing, L0, tau=2000, eps = 1, delta = 1.127, alpha_m = 2,
 	x = np.arange(0,50000,10) #m
 	
 	#equilibrium line 
-	E0 = -200
-	E = np.ones(t.shape)*E0
+	E0 = 100
+	dO180 = -41.59
+	E = E0 + 78.5*(dO18-dO180)
 	
 	# calving constant
 	c1 = c0*1.0
@@ -471,7 +475,7 @@ def calving(t, ocean_forcing, L0, tau=2000, eps = 1, delta = 1.127, alpha_m = 2,
 	
 	if plot:
 		fig = plt.figure(figsize = (8,8))
-		ax1 = fig.add_subplot(211)
+		ax1 = fig.add_subplot(312)
 		p1, = ax1.plot(t,L/1000, label = "L")
 		ax1.xaxis.grid(True)
 		ax1.set_xlim([0,t[-1]])
@@ -479,26 +483,35 @@ def calving(t, ocean_forcing, L0, tau=2000, eps = 1, delta = 1.127, alpha_m = 2,
 		ax2 = ax1.twinx()
 		p2, = ax2.plot(t,np.mean(delta_d, axis = 1),linestyle = 'dashed', color = 'red', label ="mean depression")
 		ax2.set_ylabel("<$\Delta$d> [m]")
-		ax2b = ax1.twinx()
-		ax2b.set_ylabel("ocean forcing [°C]")
-		p2b, =ax2b.plot(t,ocean_forcing,label = 'ocean forcing', color = 'darkorange',linestyle = 'dotted')
-		ax2b.spines['right'].set_position(('outward', 60))
-		ax1.legend(handles = [p1,p2,p2b])
+		ax2.legend()
+		ax1.legend()
 		
+		ax3 = fig.add_subplot(311)
+		ax3.plot(t,dO18, label = "$\delta^{18}$O")
+		ax3.set_ylabel("$\delta^{18}$O")
+		ax3.legend()
+		ax3.set_ylim([-48,-36])
+		ax3.set_xlim([0,t[-1]])
+		ax3b = ax3.twinx()
+		ax3b.plot(t,ocean_forcing, label = 'ocean forcing', color = 'red', linestyle = 'dashed')
+		ax3b.set_ylabel('ocean forcing [°C]')
+		ax3b.set_ylim([0,15])
+		ax3b.legend()
+	
 		delta_d_f = delta_d_of_L(delta_d,L,x) 
 		H_f = calculate_H_f_dynamic_bedrock(L,delta_d_f, alpha_f,eps,delta)
 		B = beta*((d(0)+delta_d[:,0]+d(L)+delta_d_f+H_f+alpha_m*np.sqrt(L))/2-E)*L
 		F = np.array([np.min([0,c[i]*(d(L[i])+delta_d_f[i])*H_f[i]]) for i in range(L.shape[0])])
-		ax4 = fig.add_subplot(212)
-		ax4.plot(t,B, label = "B")
-		ax4.plot(t,F, label = "F", linestyle = 'dashed', color = 'red')
-		ax4.plot(t, B+F, label = "B$_{tot}$", linestyle = 'dotted')
+		ax4 = fig.add_subplot(313)
+		ax4.plot(t,B+F, label = "B$_{tot}$")
+		ax4.plot(t,F, label = "F", linestyle = 'dashed', color = 'red', linewidth = 0.8)
+		ax4.plot(t, B, label = "B", linestyle = 'dotted', linewidth = 0.8)
 		ax4.legend()
 		ax4.set_xlabel("time [yrs]")
 		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
-		plt.savefig("img/ocean_forcing.pdf")
+		plt.savefig(file_name)
 		
 	return L, x, delta_d, h
 
@@ -506,7 +519,7 @@ def ocean_forcing(t, t_i, t_d=1000, T_max=2):
 	# returns temperature change of ocean
 	
 	# t: time
-	# t_i: time of beginning of all i events
+	# t_i: time of beginning of event i
 	# t_d: duration of events
 	# T_max: maximum temperature change in °C
 	
@@ -519,6 +532,30 @@ def ocean_forcing(t, t_i, t_d=1000, T_max=2):
 		
 	return delta_T
 
+def plot_paleo_record(age, dO18, ocean_forcing):
+	
+	fig = plt.figure(figsize = (12,5))
+	ax1 = fig.add_subplot(111)
+	ax1.plot(age, dO18, label = "$\delta^{18}$O")
+	ax1.set_xlim([10000,60000])
+	ax1.set_ylim([-48,-33])
+	ax1.set_ylabel("$\delta^{18}$O")
+	ax1.set_xlabel("time [yrs b2k] (GICC05)")
+	ax1.legend(loc = 2)
+	ax2 = ax1.twinx()
+	ax2.plot(age, ocean_forcing, color = 'red', label ="ocean forcing")
+	ax2.set_ylabel("ocean forcing (°C)")
+	ax2.set_ylim([0,15])
+	ax2.legend(loc = 4)
+	plt.savefig("img/paleo_record.pdf")
+
+def dO18_to_temperature(dO18):
+	# returns temperature in °C
+	alpha_fit = 0.35
+	beta_fit = 4
+	T = (dO18+35.1)/alpha_fit + 241.6 + beta_fit
+	return T -273.15
+	
 def make_movie(x,delta_d,h, filename):
 	
 	for i in range(0,h.shape[0],10):
@@ -578,12 +615,13 @@ def main():
 	L_dyn, x, delta_d, h = dynamic_bedrock(tau)
 	#make_movie(x,delta_d,h,'dynamic_bedrock')
 	
-	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING ###
+	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING FOR CONSTANT EQUILIBRIUM HEIGHT ###
 	t = np.arange(0,10000)
 	delta_T_ocean = ocean_forcing(t,[2000,8000])
-	L_calv, x, delta_d, h = calving(t,delta_T_ocean, 40000) # constant atmoph forcing: E0 = -250
+	L_calv, x, delta_d, h = calving(t,np.ones(t.shape)*(-45.41), delta_T_ocean, 40000, "img/ocean_forcing.pdf") # constant atmoph forcing: E0 = -200
 	
 	### PALEOCLIMATIC RECORDS ###
+	# read data
 	paleo_data = pd.read_excel("NGRIP_d18O_and_dust_5cm.xls",sheet_name = "NGRIP-2 d18O and Dust").to_numpy()
 	age = paleo_data[:,3]
 	dO18 = paleo_data[:,1]
@@ -592,12 +630,24 @@ def main():
 	dO18_smooth = np.convolve(dO18, np.ones(15)/15, mode='valid')
 	age_smooth = age[7:-7]
 	
-	plt.figure(figsize = (10,3))
-	plt.plot(age_smooth, dO18_smooth)
-	plt.xlabel("time [yrs b2k] (GICC05)")
-	plt.ylabel("$\delta^{18}$O")
-	plt.xlim([10000,60000])
-	plt.savefig("img/paleo_record.pdf")
+	#timing of ocean forcig
+	t_i_paleo = np.array([23340,27780,28950,32550,33830,35500,38330,40160, 41450,43460, 46900])
+	delta_T_ocean_paleo = ocean_forcing(age_smooth,t_i_paleo)
+	
+	# plot
+	plot_paleo_record(age_smooth, dO18_smooth, delta_T_ocean_paleo)
+	
+	surface_T = dO18_to_temperature(dO18_smooth)
+	
+	# use only part of data and pay attention to time <-> age
+	age_slice = age_smooth[10000:18000]
+	dO18_slice = dO18_smooth[10000:18000]
+	ocean_T_slice = delta_T_ocean_paleo[10000:18000]
+	
+	time = -(age_slice-age_slice[-1])[::-1]
+	
+	L_p, x_p, delta_d_p, h_p = calving(time,dO18_slice[::-1], ocean_T_slice[::-1], 5000, 'img/paleo_simulation.pdf')
+	
 	
 if __name__ == "__main__":
     main()
