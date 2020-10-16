@@ -109,7 +109,7 @@ def plot_case_1(t,L,a,eps,delta,alpha_m, alpha_f,c, name):
 	ax4.plot(t,-calculate_F(L, c, alpha_f, eps, delta), label = "F", linestyle = 'dashed', color = 'red')
 	ax4.legend()
 	ax4.set_xlabel("time [yrs]")
-	ax4.set_ylabel("B, -F m$^2$ a$^{-1}$")
+	ax4.set_ylabel("B, -F [m$^2$ a$^{-1}$]")
 	ax4.set_xlim([0,t[-1]])
 	ax4.xaxis.grid(True)
 	plt.savefig('img/case_1.pdf')
@@ -216,7 +216,7 @@ def case_2(L0, P_E, t, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c = 2
 		ax4.plot(t, B+F, label = "B$_{tot}$", linestyle = 'dotted')
 		ax4.legend()
 		ax4.set_xlabel("time [yrs]")
-		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
+		ax4.set_ylabel("B, F [m$^2$ a$^{-1}$]")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
 		plt.savefig('img/case_2.pdf')
@@ -370,7 +370,7 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 		ax4.plot(t, B+F, label = "B$_{tot}$", linestyle = 'dotted')
 		ax4.legend()
 		ax4.set_xlabel("time [yrs]")
-		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
+		ax4.set_ylabel("B, F [m$^2$ a$^{-1}$]")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
 		plt.savefig('img/dynamic_bedrock.pdf')
@@ -511,7 +511,7 @@ def calving(t, dO18,ocean_forcing, L0, file_name, tau=5000, eps = 1, delta = 1.1
 		ax4.plot(t, B, label = "B", linestyle = 'dotted', linewidth = 1)
 		ax4.legend(ncol = 3)
 		ax4.set_xlabel("time [yrs]")
-		ax4.set_ylabel("B, F m$^2$ a$^{-1}$")
+		ax4.set_ylabel("B, F [m$^2$ a$^{-1}$]")
 		ax4.set_xlim([0,t[-1]])
 		ax4.xaxis.grid(True)
 		plt.savefig(file_name)
@@ -564,7 +564,7 @@ def dO18_to_temperature(dO18):
 	T = (dO18+35.1)/alpha_fit + 241.6 + beta_fit
 	return T -273.15
 	
-def make_movie(x,delta_d,h, filename):
+def make_movie(x,delta_d,h):
 	
 	for i in range(0,h.shape[0],10):
 		fig = plt.figure()
@@ -586,7 +586,7 @@ def make_movie(x,delta_d,h, filename):
 		size = (width,height)
 		img_array.append(img)
 
-	out = cv2.VideoWriter('movie/'+filename+'.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
+	out = cv2.VideoWriter('movie/dynamic_bedrock.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
 	
 	for i in range(len(img_array)):
 		out.write(img_array[i])
@@ -595,6 +595,37 @@ def make_movie(x,delta_d,h, filename):
 	for file_name in glob.glob("movie/*.png"):
 		os.remove(file_name)
 	
+def make_movie_with_colored_ocean(x,delta_d,h,ocean_forcing):
+	
+	for i in range(0,h.shape[0],10):
+		fig = plt.figure()
+		plt.fill_between(x/1000, d(x)+delta_d[i,:], color = [ocean_forcing[i]/2,0,1-ocean_forcing[i]/2])
+		plt.fill_between(x/1000, 700, color = 'lightcyan')
+		plt.fill_between(x/1000,d(x)+delta_d[i,:],h[i,:], color = 'white')
+		plt.fill_between(x/1000,-400, d(x)+delta_d[i,:],color = 'lightgray')
+		plt.xlabel('x [km]')
+		plt.ylabel('height [m]')
+		plt.xlim([0,x[-1]/1000])
+		plt.ylim([-400,700])
+		fig.savefig('movie/movie_%04d.png' %i)
+		plt.close(fig)
+
+	img_array = []
+	for filename in glob.glob('movie/movie*.png'):
+		img = cv2.imread(filename)
+		height, width, layers = img.shape
+		size = (width,height)
+		img_array.append(img)
+
+	out = cv2.VideoWriter('movie/paleo.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
+	
+	for i in range(len(img_array)):
+		out.write(img_array[i])
+	out.release()
+	
+	for file_name in glob.glob("movie/*.png"):
+		os.remove(file_name)
+
 def main():
 	
 	### PLOT BEDROCK ###
@@ -621,7 +652,7 @@ def main():
 	### DYNAMIC BEDROCK ###
 	tau = 2000 # years, time constant for bedrock adjustment
 	L_dyn, x, delta_d, h = dynamic_bedrock(tau)
-	#make_movie(x,delta_d,h,'dynamic_bedrock')
+	#make_movie(x,delta_d,h)
 	
 	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING FOR CONSTANT EQUILIBRIUM HEIGHT ###
 	t = np.arange(0,10000)
@@ -658,6 +689,7 @@ def main():
 	
 	L_p, x_p, delta_d_p, h_p = calving(time,dO18_slice[::-1], ocean_T_slice[::-1], 5000, 'img/paleo_simulation.pdf')
 	
+	#make_movie_with_colored_ocean(x_p,delta_d_p,h_p,ocean_T_slice[::-1])
 	
 if __name__ == "__main__":
     main()
