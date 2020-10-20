@@ -8,7 +8,7 @@ import pandas as pd
 def d(x,d0 = 200, s =0.014, lam =300,xs = 40000,sigma = 10000):
 	# bedrock elevation
 	# d0,lam,xs,sigma in meters
-	# returnsd in m
+	# returns d in m
 	return d0 -s*x+lam*np.exp(-((x-xs)/sigma)**2)
 
 def plot_bedrock(x):
@@ -245,7 +245,7 @@ def case_2_hysteresis():
 	E = E0 + A_E*np.sin(2*np.pi*t/P_E + np.pi/2)
 	L2 = case_2(0.0001,P_E,t, plot=False)
 	plt.plot(E,L2/1000, linestyle = 'dotted',label='$P_E = 50 kyr$')
-	plt.xlabel(" E(m)")
+	plt.xlabel(" E [m]")
 	plt.ylabel("L [km]")
 	plt.legend()
 	ax.annotate(' ', xy = (430,25),xytext =(420,30),arrowprops=dict(arrowstyle="->"))
@@ -540,13 +540,14 @@ def plot_paleo_record(age, dO18, ocean_forcing):
 	fig = plt.figure(figsize = (12,5))
 	ax1 = fig.add_subplot(111)
 	ax1.plot(age[::-1], dO18[::-1], label = "$\delta^{18}$O")
-	ax1.set_xlim([60000,10000])
+	#ax1.set_xlim([60000,10000])
+	ax1.set_xlim([50000,25000])
 	ax1.set_ylim([-48,-33])
 	ax1.fill_betweenx([-48,33],46900,48300,color = 'lightgray', alpha = 0.5)
 	ax1.fill_betweenx([-48,33],38190,39990,color = 'lightgray', alpha = 0.5)
 	ax1.fill_betweenx([-48,33],28900,30600,color = 'lightgray', alpha = 0.5)
-	ax1.fill_betweenx([-48,33],23340,25340,color = 'lightgray', alpha = 0.5)
-	ax1.fill_betweenx([-48,33],14750,17200,color = 'lightgray', alpha = 0.5)
+	#ax1.fill_betweenx([-48,33],23340,25340,color = 'lightgray', alpha = 0.5)
+	#ax1.fill_betweenx([-48,33],14750,17200,color = 'lightgray', alpha = 0.5)
 	ax1.set_ylabel("$\delta^{18}$O")
 	ax1.set_xlabel("time [yrs b2k] (GICC05)")
 	ax1.legend(loc = 2)
@@ -555,7 +556,7 @@ def plot_paleo_record(age, dO18, ocean_forcing):
 	ax2.set_ylabel("ocean forcing (°C)")
 	ax2.set_ylim([0,15])
 	ax2.legend(loc = 4)
-	plt.savefig("img/paleo_record.pdf")
+	plt.savefig("img/paleo_record_25_50.pdf")
 
 def dO18_to_temperature(dO18):
 	# returns temperature in °C
@@ -626,6 +627,19 @@ def make_movie_with_colored_ocean(x,delta_d,h,ocean_forcing):
 	for file_name in glob.glob("movie/*.png"):
 		os.remove(file_name)
 
+def plot_for_different_taus():
+	t = np.arange(0,5000,1)
+	plt.figure()
+	plt.plot(t,dynamic_bedrock(1000,plot=False)[0]/1000,label = chr(964)+' = 1000 yrs')
+	plt.plot(t,dynamic_bedrock(2000,plot=False)[0]/1000, label = chr(964)+' = 2000 yrs')
+	plt.plot(t,dynamic_bedrock(5000,plot=False)[0]/1000,label = chr(964)+' = 5000 yrs')
+	plt.plot(t,dynamic_bedrock(10000,plot=False)[0]/1000,label = chr(964)+' = 10000 yrs')
+	plt.xlabel('time [yrs]')
+	plt.ylabel('L [km]')
+	plt.xlim([0,5000])
+	plt.legend(loc = 2)
+	plt.savefig('img/bedrock_time_constant.pdf')
+
 def main():
 	
 	### PLOT BEDROCK ###
@@ -650,9 +664,11 @@ def main():
 	case_2_hysteresis()
 	
 	### DYNAMIC BEDROCK ###
-	tau = 2000 # years, time constant for bedrock adjustment
+	tau = 5000 # years, time constant for bedrock adjustment
 	L_dyn, x, delta_d, h = dynamic_bedrock(tau)
+	
 	#make_movie(x,delta_d,h)
+	#plot_for_different_taus()
 	
 	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING FOR CONSTANT EQUILIBRIUM HEIGHT ###
 	t = np.arange(0,10000)
@@ -690,6 +706,7 @@ def main():
 	L_p, x_p, delta_d_p, h_p = calving(time,dO18_slice[::-1], ocean_T_slice[::-1], 5000, 'img/paleo_simulation.pdf')
 	
 	#make_movie_with_colored_ocean(x_p,delta_d_p,h_p,ocean_T_slice[::-1])
+	
 	
 if __name__ == "__main__":
     main()
