@@ -302,7 +302,7 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 	# time loop
 	for i in range(t.shape[0]-1):
 		
-		index_L = (L[i]/10).astype(int) #np.where(x==np.around(L[i],decimals = -1))[0] # use nearest neighbour approx
+		index_L = (L[i]/10).astype(int) # use nearest neighbour approx
 		
 		# front height
 		H_f = np.max([alpha_f*np.sqrt(L[i]), -eps*delta*(d(L[i])+delta_d[i,index_L])]) # m
@@ -335,6 +335,7 @@ def dynamic_bedrock(tau, eps = 1, delta = 1.127, alpha_m = 2, alpha_f = 0.5, c =
 		ddelta_ddt = -1/tau*(rho*H + delta_d[i])
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
 
+	# plot result
 	if plot:
 		fig = plt.figure(figsize = (8,10))
 		ax1 = fig.add_subplot(311)
@@ -409,9 +410,8 @@ def calving(t, dO18,ocean_forcing, L0, file_name, tau=5000, eps = 1, delta = 1.1
 	
 	#equilibrium line 
 	E0 = 100
-	dO180 = -41.429 # middle between max and min <-> mean: -41.59
+	dO180 = -41.429 # middle between max and min
 	#dO18_today = -36.65
-	#const = 78.5 # -> 350m amplitude
 	E = E0 + 224.2*(dO18-dO180) # 224.2: amplitude 2000m = 13K T difference
 	
 	# calving constant
@@ -475,6 +475,7 @@ def calving(t, dO18,ocean_forcing, L0, file_name, tau=5000, eps = 1, delta = 1.1
 		ddelta_ddt = -1/tau*(rho*H + delta_d[i])
 		delta_d[i+1] = delta_d[i] + ddelta_ddt * (t[i+1]-t[i])
 	
+	# plot result
 	if plot:
 		fig = plt.figure(figsize = (8,10))
 		ax1 = fig.add_subplot(312)
@@ -597,17 +598,40 @@ def make_movie(x,delta_d,h):
 		os.remove(file_name)
 	
 def make_movie_with_colored_ocean(x,delta_d,h,ocean_forcing):
-	
+	c = np.arange(0,51)/50
+	img = np.zeros([51,5,3])
+	img[:,0,0]=c
+	img[:,1,0]=c
+	img[:,2,0]=c
+	img[:,3,0]=c
+	img[:,4,0]=c
+	img[:,4,2]=c[::-1]
+	img[:,3,2]=c[::-1]
+	img[:,2,2]=c[::-1]
+	img[:,1,2]=c[::-1]
+	img[:,0,2]=c[::-1]
+
 	for i in range(0,h.shape[0],10):
-		fig = plt.figure()
-		plt.fill_between(x/1000, d(x)+delta_d[i,:], color = [ocean_forcing[i]/2,0,1-ocean_forcing[i]/2])
-		plt.fill_between(x/1000, 700, color = 'lightcyan')
-		plt.fill_between(x/1000,d(x)+delta_d[i,:],h[i,:], color = 'white')
-		plt.fill_between(x/1000,-400, d(x)+delta_d[i,:],color = 'lightgray')
-		plt.xlabel('x [km]')
-		plt.ylabel('height [m]')
-		plt.xlim([0,x[-1]/1000])
-		plt.ylim([-400,700])
+		fig, (ax2,ax) = plt.subplots(1,2,figsize=(10,6),gridspec_kw={'width_ratios':[4,1]})
+
+		ax.imshow(img,origin='lower', extent=[0,0.1,0,2])
+		ax.yaxis.set_label_position("right")
+		ax.yaxis.tick_right()
+		ax.set_xticks([])
+		ax.set_ylabel('ocean forcing [°C]')
+
+		ax2.fill_between(x/1000, d(x)+delta_d[i,:], color = [ocean_forcing[i]/2,0,1-ocean_forcing[i]/2])
+		ax2.fill_between(x/1000, 700, color = 'lightcyan')
+		ax2.fill_between(x/1000,d(x)+delta_d[i,:],h[i,:], color = 'white')
+		ax2.fill_between(x/1000,-400, d(x)+delta_d[i,:],color = 'lightgray')
+		ax2.set_xlabel('x [km]')
+		ax2.set_ylabel('height [m]')
+		ax2.set_xlim([0,x[-1]/1000])
+		ax2.set_ylim([-400,700])
+		
+		plt.subplots_adjust(top=0.958,bottom=0.078,left=0.063,right=0.985,hspace=0.2,wspace=0.0)
+		plt.tight_layout()
+
 		fig.savefig('movie/movie_%04d.png' %i)
 		plt.close(fig)
 
@@ -618,7 +642,7 @@ def make_movie_with_colored_ocean(x,delta_d,h,ocean_forcing):
 		size = (width,height)
 		img_array.append(img)
 
-	out = cv2.VideoWriter('movie/paleo.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
+	out = cv2.VideoWriter('movie/paleo_colour.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 20, size)
 	
 	for i in range(len(img_array)):
 		out.write(img_array[i])
@@ -644,8 +668,8 @@ def main():
 	
 	### PLOT BEDROCK ###
 	#horizontal coordinates
-	#x = np.linspace(0,50000, num = 100) #m
-	#plot_bedrock(x)
+	x = np.linspace(0,50000, num = 100) #m
+	plot_bedrock(x)
 	
 	### CASE 1 ###
 	# time 
@@ -673,7 +697,7 @@ def main():
 	### INFLUENCE OF OCEAN TEMPERATURE ON CALVING FOR CONSTANT EQUILIBRIUM HEIGHT ###
 	t = np.arange(0,10000)
 	delta_T_ocean = ocean_forcing(t,[2000,8000])
-	L_calv, x, delta_d, h = calving(t,np.ones(t.shape)*(-43), delta_T_ocean, 40000, "img/ocean_forcing.pdf") # constant atmoph forcing: E0 = -200
+	L_calv, x, delta_d, h = calving(t,np.ones(t.shape)*(-43), delta_T_ocean, 40000, "img/ocean_forcing.pdf") # constant atmoph forcing
 	
 	### PALEOCLIMATIC RECORDS ###
 	# read data
@@ -706,7 +730,6 @@ def main():
 	L_p, x_p, delta_d_p, h_p = calving(time,dO18_slice[::-1], ocean_T_slice[::-1], 5000, 'img/paleo_simulation.pdf')
 	
 	#make_movie_with_colored_ocean(x_p,delta_d_p,h_p,ocean_T_slice[::-1])
-	
 	
 if __name__ == "__main__":
     main()
